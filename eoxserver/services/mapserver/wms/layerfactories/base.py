@@ -10,8 +10,8 @@
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell 
-# copies of the Software, and to permit persons to whom the Software is 
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 #
 # The above copyright notice and this permission notice shall be included in all
@@ -43,6 +43,7 @@ from eoxserver.resources.coverages.dateline import (
 
 #-------------------------------------------------------------------------------
 
+
 class BaseStyleMixIn(object):
     STYLES = (
         ("red", 255, 0, 0),
@@ -56,9 +57,8 @@ class BaseStyleMixIn(object):
         ("cyan", 0, 255, 255),
         ("brown", 165, 42, 42)
     )
-    
-    DEFAULT_STYLE = "red"
 
+    DEFAULT_STYLE = "red"
 
     def apply_styles(self, layer, fill=False):
         # add style info
@@ -70,7 +70,7 @@ class BaseStyleMixIn(object):
                 style.color = ms.colorObj(r, g, b)
             cls.insertStyle(style)
             cls.group = name
-        
+
             layer.insertClass(cls)
 
         layer.classgroup = self.DEFAULT_STYLE
@@ -78,20 +78,19 @@ class BaseStyleMixIn(object):
 
 class OffsiteColorMixIn(object):
     def offsite_color_from_range_type(self, range_type, band_indices=None):
-        """ Helper function to create an offsite color for a given range type 
+        """ Helper function to create an offsite color for a given range type
             and optionally band indices.
         """
-        
-        if band_indices == None:
+        if band_indices is None:
             if len(range_type) == 1:
                 band_indices = [0, 0, 0]
-            elif len(range_type) >=3:
+            elif len(range_type) >= 3:
                 band_indices = [0, 1, 2]
             else:
                 # no offsite color possible
                 return None
 
-        if len(band_indices) != 3: 
+        if len(band_indices) != 3:
             raise ValueError(
                 "Wrong number of band indices to calculate offsite color."
             )
@@ -118,15 +117,15 @@ class PolygonLayerMixIn(object):
 
         srid = 4326
         layer.setProjection(crss.asProj4Str(srid))
-        layer.setMetaData("ows_srs", crss.asShortCode(srid)) 
-        layer.setMetaData("wms_srs", crss.asShortCode(srid)) 
+        layer.setMetaData("ows_srs", crss.asShortCode(srid))
+        layer.setMetaData("wms_srs", crss.asShortCode(srid))
 
         layer.dump = True
 
         layer.header = os.path.join(settings.PROJECT_DIR, "conf", "outline_template_header.html")
         layer.template = os.path.join(settings.PROJECT_DIR, "conf", "outline_template_dataset.html")
         layer.footer = os.path.join(settings.PROJECT_DIR, "conf", "outline_template_footer.html")
-        
+
         layer.setMetaData("gml_include_items", "all")
         layer.setMetaData("wms_include_items", "all")
 
@@ -137,9 +136,10 @@ class PolygonLayerMixIn(object):
         return layer
 
 
-class PlainLayerMixIn(object): 
+class PlainLayerMixIn(object):
 
-    def _create_layer(self, coverage, name, extent=None, group=None, wrapped=False):
+    def _create_layer(self, coverage, name, extent=None, group=None,
+                      wrapped=False):
         layer = ms.layerObj()
         layer.name = name
         layer.type = ms.MS_LAYER_RASTER
@@ -152,7 +152,8 @@ class PlainLayerMixIn(object):
         #)
 
         if wrapped:
-            # set the info for the connector to wrap this layer around the dateline
+            # set the info for the connector to wrap this layer around the
+            # dateline
             layer.setMetaData("eoxs_wrap_dateline", "true")
 
         self._set_projection(layer, coverage.spatial_reference)
@@ -178,11 +179,16 @@ class PlainLayerMixIn(object):
             blue = options.default_blue
             alpha = options.default_alpha
 
+            # rgb(a) bands
             if red is not None and green is not None and blue is not None:
                 bands = "%d,%d,%d" % (red, green, blue)
                 if alpha is not None:
                     bands += alpha
                 layer.setProcessingKey("BANDS", bands)
+
+            # single band grey
+            elif red is not None and (green, blue, alpha) == (None, None, None):
+                layer.setProcessingKey("BANDS", str(red))
 
             if options.scale_auto:
                 layer.setProcessingKey("SCALE", "AUTO")
@@ -195,12 +201,13 @@ class PlainLayerMixIn(object):
                 layer.setProcessingKey("RESAMPLE", str(options.resampling))
 
     def _set_projection(self, layer, sr):
-        short_epsg = "EPSG:%d" % sr.srid
+        if sr.srid is not None:
+            short_epsg = "EPSG:%d" % sr.srid
+            layer.setMetaData("ows_srs", short_epsg)
+            layer.setMetaData("wms_srs", short_epsg)
         layer.setProjection(sr.proj)
-        layer.setMetaData("ows_srs", short_epsg) 
-        layer.setMetaData("wms_srs", short_epsg) 
 
-  
+
 class AbstractLayerFactory(PlainLayerMixIn, Component):
     implements(LayerFactoryInterface)
     abstract = True
@@ -211,10 +218,10 @@ class AbstractLayerFactory(PlainLayerMixIn, Component):
 
 class BaseCoverageLayerFactory(OffsiteColorMixIn, PlainLayerMixIn, Component):
     implements(LayerFactoryInterface)
-    # NOTE: Technically, this class is not abstract but we need it labeled 
+    # NOTE: Technically, this class is not abstract but we need it labeled
     #       as an abstract class to allow inheritance while avoiding multiple
     #       component's imports.
-    abstract = True 
+    abstract = True
 
     def generate(self, eo_object, group_layer, suffix, options):
         coverage = eo_object.cast()
@@ -226,8 +233,8 @@ class BaseCoverageLayerFactory(OffsiteColorMixIn, PlainLayerMixIn, Component):
 
         offsite = self.offsite_color_from_range_type(range_type)
         options = self.get_render_options(coverage)
-        
-        if extent_crosses_dateline(extent, srid):
+
+        if srid is not None and extent_crosses_dateline(extent, srid):
             identifier = coverage.identifier
             wrapped_extent = wrap_extent_around_dateline(extent, srid)
             layer = self._create_layer(
@@ -249,8 +256,5 @@ class BaseCoverageLayerFactory(OffsiteColorMixIn, PlainLayerMixIn, Component):
             self.set_render_options(layer, offsite, options)
             yield layer, data_items
 
-
     def generate_group(self, name):
         return ms.Layer(name)
-
-
